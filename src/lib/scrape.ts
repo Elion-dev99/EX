@@ -1,7 +1,7 @@
 import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 import { buildBoyUrl } from "./members";
-import type { Member, MemberShifts, ShiftEntry } from "./types";
+import type { Member, MemberShifts, ShiftEntry, ShiftStatus } from "./types";
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; EX-ShiftCalendar/1.0; +https://github.com/Elion-dev99/EX)";
@@ -13,9 +13,7 @@ function resolveYear(month: number, day: number, now = new Date()): number {
   const candidate = new Date(year, month - 1, day);
   const diffDays = (candidate.getTime() - now.getTime()) / 86_400_000;
 
-  // Near year boundary: Dec schedule in Jan → previous year
   if (diffDays > 300 && month >= 11 && now.getMonth() <= 1) return year - 1;
-  // Near year boundary: Jan schedule in Dec → next year
   if (diffDays < -40 && month <= 2 && now.getMonth() >= 10) return year + 1;
   return year;
 }
@@ -27,25 +25,78 @@ function toIsoDate(month: number, day: number, now = new Date()): string {
   return `${year}-${mm}-${dd}`;
 }
 
-function parseShiftRow($: cheerio.CheerioAPI, ul: AnyNode): Omit<ShiftEntry, "date" | "label"> {
+function buildLabel(parsed: Omit<ShiftEntry, "date" | "label">): string {
+  if (parsed.status === "off") return parsed.statusText || "休";
+  if (parsed.status === "inquiry") return parsed.statusText || "要問合せ";
+  if (parsed.status === "other") return parsed.statusText || "その他";
+
+  const range = [parsed.start, parsed.end].filter(Boolean).join("〜");
+  if (parsed.night === true) return `${range} / NIGHT ○`;
+  if (parsed.night === false) return `${range} / NIGHT ×`;
+  return range || "出勤";
+}
+
+function parseShiftRow(
+  $: cheerio.CheerioAPI,
+  ul: AnyNode,
+): Omit<ShiftEntry, "date" | "label"> {
   const items = $(ul)
     .children("li")
     .toArray()
     .map((li) => $(li).text().trim())
     .filter(Boolean);
 
+  const joined = items.join(" ");
   if (items.some((item) => item.includes("休")) || $(ul).find("li.holiday").length > 0) {
-    return { start: null, end: null, night: false, isOff: true };
+    return {
+      start: null,
+      end: null,
+      night: null,
+      isOff: true,
+      status: "off",
+      statusText: "休",
+    };
+  }
+
+  if (items.some((item) => item.includes("要問合せ")) || $(ul).find("li.single").length > 0) {
+    const text = items.find((item) => item.includes("要問合せ")) || items[0] || "要問合せ";
+    return {
+      start: null,
+      end: null,
+      night: null,
+      isOff: false,
+      status: "inquiry",
+      statusText: text,
+    };
   }
 
   const times = items.filter((item) => /^\d{1,2}:\d{2}$/.test(item));
-  const night = items.includes("○") || items.some((item) => /night/i.test(item) && item.includes("○"));
+  let night: boolean | null = null;
+  if (items.includes("○")) night = true;
+  else if (items.includes("×")) night = false;
+
+  if (times.length > 0) {
+    return {
+      start: times[0] ?? null,
+      end: times[1] ?? null,
+      night,
+      isOff: false,
+      status: "work",
+      statusText: null,
+    };
+  }
+
+  const other = items.find((item) => !["○", "×"].includes(item)) || joined || "不明";
+  const status: ShiftStatus =
+    other.includes("待機") || other.includes("自宅") ? "other" : "other";
 
   return {
-    start: times[0] ?? null,
-    end: times[1] ?? null,
-    night,
-    isOff: times.length === 0,
+    start: null,
+    end: null,
+    night: null,
+    isOff: false,
+    status,
+    statusText: other,
   };
 }
 
@@ -79,14 +130,11 @@ export function parseBoyDetailHtml(html: string, member: Member, now = new Date(
     const day = Number(match[2]);
     const parsed = parseShiftRow($, valueNodes[i]);
     const date = toIsoDate(month, day, now);
-    const label = parsed.isOff
-      ? "休"
-      : [parsed.start, parsed.end].filter(Boolean).join("〜") + (parsed.night ? " / NIGHT" : "");
 
     shifts.push({
       date,
       ...parsed,
-      label,
+      label: buildLabel(parsed),
     });
   }
 
@@ -149,7 +197,6 @@ export async function scrapeAllMembers(members: Member[], now = new Date()): Pro
   const targets = members.filter((m) => m.enabled && m.boyId);
   const results = await Promise.all(targets.map((member) => scrapeMemberShifts(member, now)));
 
-  // Keep original order of all members, including disabled/empty slots as skipped
   const byId = new Map(results.map((r) => [r.member.id, r]));
   return members.map((member) => {
     if (byId.has(member.id)) return byId.get(member.id)!;

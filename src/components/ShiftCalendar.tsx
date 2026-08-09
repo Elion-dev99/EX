@@ -138,13 +138,7 @@ export function ShiftCalendar({ members }: Props) {
                 <span className="swatch" style={{ background: item.color }} />
                 <div>
                   <strong>{item.memberName}</strong>
-                  <p>
-                    {item.shift.isOff
-                      ? "休み"
-                      : `${item.shift.start ?? "?"}〜${item.shift.end ?? "?"}${
-                          item.shift.night ? " / NIGHT ○" : ""
-                        }`}
-                  </p>
+                  <p>{item.shift.label}</p>
                 </div>
               </li>
             ))}
