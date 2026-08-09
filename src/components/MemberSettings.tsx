@@ -86,7 +86,8 @@ export function MemberSettings({ members, onSaved }: Props) {
       {open && (
         <div className="settings-panel">
           <p className="settings-help">
-            プロフィールURL（例: https://www.dgdgdg.com/boy/detail.php?shop_id=4&boy_id=10235）を6人分登録してください。
+            プロフィールURL（例: https://www.dgdgdg.com/boy/detail.php?shop_id=4&boy_id=10235）を6人分登録できます。Cloudflare
+            本番では保存できないため、恒久変更は data/members.json を更新して再デプロイしてください。
           </p>
           <div className="settings-list">
             {draft.map((member, index) => (

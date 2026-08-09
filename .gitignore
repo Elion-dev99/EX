@@ -17,12 +17,20 @@
 /.next/
 /out/
 
+# cloudflare / opennext
+/.open-next/
+/.wrangler/
+/cloudflare-env.d.ts
+/worker-configuration.d.ts
+
 # production
 /build
 
 # misc
 .DS_Store
 *.pem
+.playwright-mcp/
+/shift-*.png
 
 # debug
 npm-debug.log*

@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { z } from "zod";
+import defaultMembers from "../../data/members.json";
 import type { Member } from "./types";
 
 const membersFile = path.join(process.cwd(), "data", "members.json");
@@ -17,14 +18,26 @@ const memberSchema = z.object({
 const membersSchema = z.array(memberSchema).length(6);
 
 export async function readMembers(): Promise<Member[]> {
-  const raw = await fs.readFile(membersFile, "utf8");
-  return membersSchema.parse(JSON.parse(raw));
+  try {
+    const raw = await fs.readFile(membersFile, "utf8");
+    return membersSchema.parse(JSON.parse(raw));
+  } catch {
+    // Cloudflare Workers など書き込み不可環境ではバンドル済み設定を使う
+    return membersSchema.parse(defaultMembers);
+  }
 }
 
 export async function writeMembers(members: Member[]): Promise<Member[]> {
   const parsed = membersSchema.parse(members);
-  await fs.writeFile(membersFile, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
-  return parsed;
+
+  try {
+    await fs.writeFile(membersFile, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+    return parsed;
+  } catch {
+    throw new Error(
+      "本番(Cloudflare)ではメンバー設定をファイル保存できません。data/members.json を更新して再デプロイしてください。",
+    );
+  }
 }
 
 export function buildBoyUrl(shopId: number, boyId: number): string {

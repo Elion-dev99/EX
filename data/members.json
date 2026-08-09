@@ -9,42 +9,42 @@
   },
   {
     "id": "member-2",
-    "name": "幹部2",
+    "name": "れんた",
     "shopId": 4,
-    "boyId": null,
+    "boyId": 11920,
     "color": "#B45309",
-    "enabled": false
+    "enabled": true
   },
   {
     "id": "member-3",
-    "name": "幹部3",
+    "name": "かいせい",
     "shopId": 4,
-    "boyId": null,
+    "boyId": 10665,
     "color": "#1D4ED8",
-    "enabled": false
+    "enabled": true
   },
   {
     "id": "member-4",
-    "name": "幹部4",
+    "name": "こうや",
     "shopId": 4,
-    "boyId": null,
+    "boyId": 11335,
     "color": "#BE123C",
-    "enabled": false
+    "enabled": true
   },
   {
     "id": "member-5",
-    "name": "幹部5",
+    "name": "かずさ",
     "shopId": 4,
-    "boyId": null,
+    "boyId": 10781,
     "color": "#15803D",
-    "enabled": false
+    "enabled": true
   },
   {
     "id": "member-6",
-    "name": "幹部6",
+    "name": "こうしん",
     "shopId": 4,
-    "boyId": null,
+    "boyId": 11969,
     "color": "#7C2D12",
-    "enabled": false
+    "enabled": true
   }
 ]
