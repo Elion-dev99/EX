@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { ShopCalendar } from "@/components/ShopCalendar";
 import type { ShopDayBoy, ShopScheduleResult } from "@/lib/shop-schedule";
 
 type Filter = "all" | "work" | "inquiry" | "off" | "osaka" | "other-shop";
@@ -144,7 +145,7 @@ export function ShopShiftBoard({ shopId }: Props) {
           <p className="brand">EX Shift</p>
           <h1>大阪店 全員シフト</h1>
           <p className="lede">
-            ボーイスケジュールの「当店在籍」{data?.roster.length ?? "—"}人を表示。待機店舗・時間・休み（未掲載）が日付ごとに見られます。
+            当店在籍 {data?.roster.length ?? "—"}人をカレンダー表示。日付を選ぶと待機店舗・時間・休みまで全員分確認できます。
           </p>
           <div className="cta-row">
             <button type="button" className="primary-btn" onClick={() => load(true)} disabled={pending}>
@@ -168,19 +169,13 @@ export function ShopShiftBoard({ shopId }: Props) {
 
       {error && <p className="error banner">{error}</p>}
 
-      <section className="date-strip" aria-label="日付選択">
-        {(data?.days || []).map((day) => (
-          <button
-            key={day.date}
-            type="button"
-            className={selectedDate === day.date ? "date-pill active" : "date-pill"}
-            onClick={() => setSelectedDate(day.date)}
-          >
-            {toDateLabel(day.date, day.dateLabel)}
-            <small>{day.boys.length}</small>
-          </button>
-        ))}
-      </section>
+      {data && (
+        <ShopCalendar
+          days={data.days}
+          selectedDate={selectedDate}
+          onSelectDate={setSelectedDate}
+        />
+      )}
 
       <section className="shop-toolbar">
         <div className="filter-row">
@@ -212,7 +207,11 @@ export function ShopShiftBoard({ shopId }: Props) {
 
       <section className="shop-list">
         <h2>
-          {selectedDay ? `${toDateLabel(selectedDay.date, selectedDay.dateLabel)} の一覧` : "日付を選択"}
+          {selectedDay
+            ? `${toDateLabel(selectedDay.date, selectedDay.dateLabel)} の一覧`
+            : selectedDate
+              ? `${toDateLabel(selectedDate)} の一覧`
+              : "日付を選択"}
           <span className="muted"> {rows.length}人</span>
         </h2>
         <ul>
@@ -221,11 +220,7 @@ export function ShopShiftBoard({ shopId }: Props) {
               <span className="swatch" style={{ background: row.color }} />
               <div className="shop-row-main">
                 <strong>{row.name}</strong>
-                <p>
-                  {row.entry
-                    ? row.entry.label
-                    : "休み / この日の公開シフトなし"}
-                </p>
+                <p>{row.entry ? row.entry.label : "休み / この日の公開シフトなし"}</p>
               </div>
               <a href={row.sourceUrl} target="_blank" rel="noreferrer">
                 詳細
