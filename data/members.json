@@ -1,0 +1,50 @@
+[
+  {
+    "id": "member-1",
+    "name": "つむぎ",
+    "shopId": 4,
+    "boyId": 10235,
+    "color": "#0F766E",
+    "enabled": true
+  },
+  {
+    "id": "member-2",
+    "name": "れんた",
+    "shopId": 4,
+    "boyId": 11920,
+    "color": "#B45309",
+    "enabled": true
+  },
+  {
+    "id": "member-3",
+    "name": "かいせい",
+    "shopId": 4,
+    "boyId": 10665,
+    "color": "#1D4ED8",
+    "enabled": true
+  },
+  {
+    "id": "member-4",
+    "name": "こうや",
+    "shopId": 4,
+    "boyId": 11335,
+    "color": "#BE123C",
+    "enabled": true
+  },
+  {
+    "id": "member-5",
+    "name": "かずさ",
+    "shopId": 4,
+    "boyId": 10781,
+    "color": "#15803D",
+    "enabled": true
+  },
+  {
+    "id": "member-6",
+    "name": "こうしん",
+    "shopId": 4,
+    "boyId": 11969,
+    "color": "#7C2D12",
+    "enabled": true
+  }
+]
