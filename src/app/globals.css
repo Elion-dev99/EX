@@ -325,16 +325,21 @@ input {
 
 .chip {
   display: block;
-  width: fit-content;
+  box-sizing: border-box;
+  width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
   color: white;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
+  font-weight: 700;
   line-height: 1.2;
-  padding: 0.18rem 0.4rem;
-  border-radius: 999px;
+  letter-spacing: -0.02em;
+  padding: 0.14rem 0.2rem;
+  border-radius: 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  text-align: center;
 }
 
 .more,
@@ -412,15 +417,36 @@ input {
     padding-top: 1rem;
   }
 
+  .weekday-row,
+  .month-grid {
+    gap: 0.28rem;
+  }
+
   .day-cell {
-    min-height: 78px;
+    min-height: 108px;
     border-radius: 10px;
-    padding: 0.3rem;
+    padding: 0.22rem;
+  }
+
+  .day-num {
+    font-size: 0.78rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .day-chips {
+    gap: 0.14rem;
   }
 
   .chip {
-    font-size: 0.62rem;
-    padding: 0.12rem 0.28rem;
+    font-size: 0.5rem;
+    line-height: 1.15;
+    padding: 0.1rem 0.12rem;
+    border-radius: 4px;
+  }
+
+  .more,
+  .off-note {
+    font-size: 0.55rem;
   }
 
   .calendar-toolbar h2 {
