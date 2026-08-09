@@ -1,7 +1,13 @@
 import * as cheerio from "cheerio";
-import { getCache, setCache } from "./cache";
 import { colorFromBoyId } from "./colors";
 import { buildBoyUrl } from "./members";
+
+export type ShopRosterBoy = {
+  boyId: number;
+  name: string;
+  color: string;
+  sourceUrl: string;
+};
 
 export type ShopDayBoy = {
   boyId: number;
@@ -23,112 +29,31 @@ export type ShopDaySchedule = {
 export type ShopScheduleResult = {
   shopId: number;
   sourceUrl: string;
+  shiftSourceUrl: string;
   affiliation: string;
-  roster: Array<{
-    boyId: number;
-    name: string;
-    color: string;
-    sourceUrl: string;
-  }>;
+  roster: ShopRosterBoy[];
   days: ShopDaySchedule[];
 };
 
 const USER_AGENT =
   "Mozilla/5.0 (compatible; EX-ShiftCalendar/1.0; +https://github.com/Elion-dev99/EX)";
 
-/** shop_id → プロフィール「所属」に表示される店名 */
+/** shop_id → 表示用の店名 */
 const SHOP_AFFILIATION: Record<number, string> = {
   2: "神戸店",
   4: "大阪店",
 };
 
-const AFFILIATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const AFFILIATION_CONCURRENCY = 8;
-
 export function buildShopShiftUrl(shopId: number): string {
   return `https://www.dgdgdg.com/boy/shift.php?shop_id=${shopId}`;
 }
 
+export function buildShopBoyListUrl(shopId: number): string {
+  return `https://www.dgdgdg.com/boy/list.php?shop_id=${shopId}`;
+}
+
 export function shopAffiliationLabel(shopId: number): string {
   return SHOP_AFFILIATION[shopId] || `shop_${shopId}`;
-}
-
-/** プロフィール詳細の所属（#Belongshop）を取り出す */
-export function parseBelongShop(html: string): string | null {
-  const $ = cheerio.load(html);
-  const text = $("#Belongshop").first().text().replace(/\s+/g, " ").trim();
-  if (text) return text;
-  const m = html.match(/<div[^>]*id=["']Belongshop["'][^>]*>([^<]*)<\/div>/i);
-  return m?.[1]?.replace(/\s+/g, " ").trim() || null;
-}
-
-async function mapPool<T, R>(
-  items: T[],
-  concurrency: number,
-  worker: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const results = new Array<R>(items.length);
-  let next = 0;
-  async function run() {
-    while (next < items.length) {
-      const i = next;
-      next += 1;
-      results[i] = await worker(items[i]);
-    }
-  }
-  const runners = Array.from({ length: Math.min(concurrency, items.length) }, () => run());
-  await Promise.all(runners);
-  return results;
-}
-
-async function fetchBelongShop(shopId: number, boyId: number): Promise<string | null> {
-  const cacheKey = `belongshop:${shopId}:${boyId}`;
-  const cached = getCache<string | null>(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-
-  const url = buildBoyUrl(shopId, boyId);
-  try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "ja,en;q=0.8",
-      },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      setCache(cacheKey, null, 5 * 60 * 1000);
-      return null;
-    }
-    const belong = parseBelongShop(await res.text());
-    setCache(cacheKey, belong, AFFILIATION_CACHE_TTL_MS);
-    return belong;
-  } catch {
-    setCache(cacheKey, null, 5 * 60 * 1000);
-    return null;
-  }
-}
-
-export async function filterByProfileAffiliation(
-  schedule: Omit<ShopScheduleResult, "affiliation"> & { affiliation?: string },
-  affiliation: string,
-): Promise<ShopScheduleResult> {
-  const allowed = new Set<number>();
-  await mapPool(schedule.roster, AFFILIATION_CONCURRENCY, async (boy) => {
-    const belong = await fetchBelongShop(schedule.shopId, boy.boyId);
-    if (belong === affiliation) allowed.add(boy.boyId);
-  });
-
-  return {
-    shopId: schedule.shopId,
-    sourceUrl: schedule.sourceUrl,
-    affiliation,
-    roster: schedule.roster.filter((b) => allowed.has(b.boyId)),
-    days: schedule.days.map((day) => ({
-      ...day,
-      boys: day.boys.filter((b) => allowed.has(b.boyId)),
-    })),
-  };
 }
 
 function resolveYear(month: number, day: number, now = new Date()): number {
@@ -158,32 +83,90 @@ function classifyTime(timeText: string | null): {
   return { status: "work", label: timeText };
 }
 
-function extractHonTenSectionHtml(dayHtml: string): string {
-  const start = dayHtml.indexOf("当店在籍ボーイ");
-  if (start < 0) return "";
-  const rest = dayHtml.slice(start);
-  const endMarkers = ["エリア内店在籍ボーイ", "<h2>", "<!-- ▲メイン"];
-  let end = rest.length;
-  for (const marker of endMarkers) {
-    const idx = rest.indexOf(marker, 10);
-    if (idx > 0 && idx < end) end = idx;
-  }
-  return rest.slice(0, end);
+async function fetchHtml(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": USER_AGENT,
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "ja,en;q=0.8",
+    },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.text();
 }
 
-export function parseShopShiftHtml(
+/**
+ * ボーイ一覧の本店グリッド（title_boylist_taiki / h2=taiki）を正規ロスターにする。
+ * W在籍・呼び出し等は含めない。
+ */
+export function parseShopRosterHtml(html: string, shopId: number): ShopRosterBoy[] {
+  const sections = html.split(/<h2[\s>]/i);
+  let sectionHtml = "";
+  for (const part of sections) {
+    const head = part.slice(0, 500);
+    if (/title_boylist_taiki/i.test(head) || />\s*taiki\s*</i.test(head)) {
+      sectionHtml = part;
+      break;
+    }
+  }
+  if (!sectionHtml) {
+    throw new Error("ボーイ一覧の本店セクション（taiki）が見つかりません");
+  }
+
+  const $ = cheerio.load(sectionHtml);
+  const roster: ShopRosterBoy[] = [];
+  const seen = new Set<number>();
+
+  $("a[href*='boy_id=']").each((_, a) => {
+    const href = $(a).attr("href") || "";
+    const idMatch = href.match(/boy_id=(\d{3,6})/);
+    if (!idMatch) return;
+    const boyId = Number(idMatch[1]);
+    if (seen.has(boyId)) return;
+    seen.add(boyId);
+
+    const name =
+      $(a).find(".boy_name").first().text().replace(/\s+/g, " ").trim() ||
+      $(a).closest("li, div, td").find(".boy_name").first().text().replace(/\s+/g, " ").trim() ||
+      $(a).find("img[alt]").first().attr("alt")?.replace(/\s+/g, " ").trim() ||
+      `boy_${boyId}`;
+
+    roster.push({
+      boyId,
+      name,
+      color: colorFromBoyId(boyId),
+      sourceUrl: buildBoyUrl(shopId, boyId),
+    });
+  });
+
+  if (roster.length === 0) {
+    throw new Error("ボーイ一覧から在籍ボーイを取得できませんでした");
+  }
+  return roster;
+}
+
+function extractDayBoysHtml(dayHtml: string): string {
+  // 当店在籍 + エリア内の両方を見る（ロスターで後から絞る）
+  const startMarkers = ["当店在籍ボーイ", "エリア内店在籍ボーイ", "出勤ボーイ"];
+  let start = -1;
+  for (const marker of startMarkers) {
+    const idx = dayHtml.indexOf(marker);
+    if (idx >= 0 && (start < 0 || idx < start)) start = idx;
+  }
+  if (start < 0) return dayHtml;
+  return dayHtml.slice(start);
+}
+
+export function parseShopShiftDays(
   html: string,
   shopId: number,
+  allowedBoyIds: Set<number> | null = null,
   now = new Date(),
-): Omit<ShopScheduleResult, "affiliation"> {
-  const sourceUrl = buildShopShiftUrl(shopId);
+): ShopDaySchedule[] {
   const days: ShopDaySchedule[] = [];
-  const rosterMap = new Map<
-    number,
-    { boyId: number; name: string; color: string; sourceUrl: string }
-  >();
-
   const dayMatches = [...html.matchAll(/<h2><span>([^<]+)<\/span>の出勤ボーイ情報<\/h2>/g)];
+
   for (let i = 0; i < dayMatches.length; i += 1) {
     const match = dayMatches[i];
     const dateLabel = match[1].trim();
@@ -192,23 +175,18 @@ export function parseShopShiftHtml(
 
     const from = match.index ?? 0;
     const to = i + 1 < dayMatches.length ? (dayMatches[i + 1].index ?? html.length) : html.length;
-    const dayHtml = html.slice(from, to);
-    const sectionHtml = extractHonTenSectionHtml(dayHtml);
-    if (!sectionHtml) {
-      days.push({ date, dateLabel, boys: [] });
-      continue;
-    }
-
-    const $ = cheerio.load(sectionHtml);
+    const dayHtml = extractDayBoysHtml(html.slice(from, to));
+    const $ = cheerio.load(dayHtml);
     const boys: ShopDayBoy[] = [];
     const seen = new Set<number>();
 
     $("a[href*='boy_id=']").each((_, a) => {
       const href = $(a).attr("href") || "";
-      const idMatch = href.match(/boy_id=(\d{4,5})/);
+      const idMatch = href.match(/boy_id=(\d{3,6})/);
       if (!idMatch) return;
       const boyId = Number(idMatch[1]);
       if (seen.has(boyId)) return;
+      if (allowedBoyIds && !allowedBoyIds.has(boyId)) return;
       seen.add(boyId);
 
       const card = $(a);
@@ -221,8 +199,6 @@ export function parseShopShiftHtml(
       const timeText = card.find(".time").first().text().replace(/\s+/g, " ").trim() || null;
       const { status, label: timeLabel } = classifyTime(timeText);
       const label = waitLabel ? `${waitLabel} / ${timeLabel}` : timeLabel;
-      const color = colorFromBoyId(boyId);
-      const url = buildBoyUrl(shopId, boyId);
 
       boys.push({
         boyId,
@@ -231,16 +207,9 @@ export function parseShopShiftHtml(
         timeText,
         status,
         label,
-        sourceUrl: url,
-        color,
+        sourceUrl: buildBoyUrl(shopId, boyId),
+        color: colorFromBoyId(boyId),
       });
-
-      const prev = rosterMap.get(boyId);
-      if (!prev) {
-        rosterMap.set(boyId, { boyId, name, color, sourceUrl: url });
-      } else if (name && name !== `boy_${boyId}`) {
-        prev.name = name;
-      }
     });
 
     days.push({
@@ -250,9 +219,32 @@ export function parseShopShiftHtml(
     });
   }
 
+  return days;
+}
+
+/** @deprecated kept for tests / callers that only have shift HTML */
+export function parseShopShiftHtml(
+  html: string,
+  shopId: number,
+  now = new Date(),
+): Omit<ShopScheduleResult, "affiliation" | "shiftSourceUrl"> {
+  const days = parseShopShiftDays(html, shopId, null, now);
+  const rosterMap = new Map<number, ShopRosterBoy>();
+  for (const day of days) {
+    for (const boy of day.boys) {
+      if (!rosterMap.has(boy.boyId)) {
+        rosterMap.set(boy.boyId, {
+          boyId: boy.boyId,
+          name: boy.name,
+          color: boy.color,
+          sourceUrl: boy.sourceUrl,
+        });
+      }
+    }
+  }
   return {
     shopId,
-    sourceUrl,
+    sourceUrl: buildShopShiftUrl(shopId),
     roster: [...rosterMap.values()].sort((a, b) => a.name.localeCompare(b.name, "ja")),
     days,
   };
@@ -262,19 +254,32 @@ export async function scrapeShopSchedule(
   shopId: number,
   now = new Date(),
 ): Promise<ShopScheduleResult> {
-  const url = buildShopShiftUrl(shopId);
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": USER_AGENT,
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "ja,en;q=0.8",
-    },
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  const html = await res.text();
-  const parsed = parseShopShiftHtml(html, shopId, now);
-  const affiliation = shopAffiliationLabel(shopId);
-  // シフト表の「当店在籍」には他店所属が混ざるため、プロフィール所属で絞る
-  return filterByProfileAffiliation(parsed, affiliation);
+  const listUrl = buildShopBoyListUrl(shopId);
+  const shiftUrl = buildShopShiftUrl(shopId);
+  const [listHtml, shiftHtml] = await Promise.all([fetchHtml(listUrl), fetchHtml(shiftUrl)]);
+
+  const roster = parseShopRosterHtml(listHtml, shopId);
+  const allowed = new Set(roster.map((b) => b.boyId));
+  const days = parseShopShiftDays(shiftHtml, shopId, allowed, now);
+
+  // シフトに出ている名前の方が新しい場合はロスター名を更新
+  const nameById = new Map<number, string>();
+  for (const day of days) {
+    for (const boy of day.boys) {
+      if (boy.name && !boy.name.startsWith("boy_")) nameById.set(boy.boyId, boy.name);
+    }
+  }
+  const mergedRoster = roster.map((boy) => ({
+    ...boy,
+    name: nameById.get(boy.boyId) || boy.name,
+  }));
+
+  return {
+    shopId,
+    sourceUrl: listUrl,
+    shiftSourceUrl: shiftUrl,
+    affiliation: shopAffiliationLabel(shopId),
+    roster: mergedRoster,
+    days,
+  };
 }
