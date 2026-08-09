@@ -14,8 +14,8 @@ const notoSansJp = Noto_Sans_JP({
 });
 
 export const metadata: Metadata = {
-  title: "EX Shift | 幹部シフトカレンダー",
-  description: "男子学園プロフィールの出勤スケジュールを横断表示するカレンダー",
+  title: "EX Shift | シフトカレンダー",
+  description: "男子学園の公開出勤スケジュールを幹部・店舗全員で横断表示するカレンダー",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
