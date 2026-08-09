@@ -13,9 +13,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment: production
     permissions:
       contents: read
+      deployments: write
     steps:
       - uses: actions/checkout@v4
 

@@ -41,6 +41,8 @@ OpenNext + Cloudflare Workers 構成済みです。
 
 ### 初回セットアップ（必須）
 
+private リポジトリのままで問題ありません（公開不要）。
+
 1. Cloudflare で **Workers Paid** を有効化
 2. API Token（Edit Cloudflare Workers）と Account ID を取得
 3. GitHub Actions Secrets に登録  
