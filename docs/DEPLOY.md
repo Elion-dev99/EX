@@ -44,11 +44,12 @@ Workers Builds（ダッシュボードから Git 連携）でも private は可�
 ## 4. 動作
 
 ```mermaid
-PR (cursor/*) → CI → Auto Merge (squash) → main push → Deploy to Cloudflare Workers
+PR (cursor/*) → CI → squash merge → Deploy workflow dispatch → Cloudflare Workers
 ```
 
-- `cursor/*` ブランチの PR は `Auto Merge` workflow が auto-merge を有効化
-- `main` へマージされると `Deploy` workflow が `ex-shift` Worker をデプロイ
+- `cursor/*` PR は CI 成功後に squash マージ
+- `GITHUB_TOKEN` によるマージでは `push` ワークフローが自動発火しないため、CI から `Deploy` を `workflow_dispatch` で起動
+- 初回だけ、GitHub Actions の **Deploy → Run workflow** を手動実行してもOK
 
 ## 5. 手動デプロイ
 
