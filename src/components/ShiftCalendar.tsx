@@ -106,7 +106,7 @@ export function ShiftCalendar({ members }: Props) {
             >
               <span className="day-num">{cell.day}</span>
               <div className="day-chips">
-                {working.slice(0, 4).map((item) => (
+                {working.map((item) => (
                   <span
                     key={`${item.memberId}-${item.shift.date}`}
                     className="chip"
@@ -116,7 +116,6 @@ export function ShiftCalendar({ members }: Props) {
                     {item.memberName}
                   </span>
                 ))}
-                {working.length > 4 && <span className="more">+{working.length - 4}</span>}
                 {working.length === 0 && offs.length > 0 && (
                   <span className="off-note">休み {offs.length}</span>
                 )}
