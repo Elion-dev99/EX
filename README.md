@@ -34,6 +34,10 @@ npm run dev
 
 ブラウザで [http://localhost:3000](http://localhost:3000) を開きます。
 
+## 公開URL
+
+https://ex-shift.elion-dev08.workers.dev
+
 ## Cloudflare へデプロイ
 
 OpenNext + Cloudflare Workers 構成済みです。  

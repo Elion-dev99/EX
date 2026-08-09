@@ -51,7 +51,11 @@ PR (cursor/*) → CI → squash merge → Deploy workflow dispatch → Cloudflar
 - `GITHUB_TOKEN` によるマージでは `push` ワークフローが自動発火しないため、CI から `Deploy` を `workflow_dispatch` で起動
 - 初回だけ、GitHub Actions の **Deploy → Run workflow** を手動実行してもOK
 
-## 5. 手動デプロイ
+## 5. 公開URL
+
+https://ex-shift.elion-dev08.workers.dev
+
+## 6. 手動デプロイ
 
 ```bash
 npx wrangler login
