@@ -36,11 +36,28 @@ npm run dev
 
 ## Cloudflare へデプロイ
 
-OpenNext + Cloudflare Workers 構成済みです。
+OpenNext + Cloudflare Workers 構成済みです。  
+詳細手順は [docs/DEPLOY.md](docs/DEPLOY.md) を参照してください。
+
+### 初回セットアップ（必須）
+
+1. Cloudflare で **Workers Paid** を有効化
+2. API Token（Edit Cloudflare Workers）と Account ID を取得
+3. GitHub Actions Secrets に登録  
+   - `CLOUDFLARE_API_TOKEN`  
+   - `CLOUDFLARE_ACCOUNT_ID`
+4. GitHub リポジトリ設定で **Allow auto-merge** を ON
+
+これ以降の流れ:
+
+- `cursor/*` の PR → CI 通過後に自動マージ（squash）
+- `main` 更新 → Cloudflare Workers へ自動デプロイ
+
+### 手動デプロイ
 
 ```bash
 npm install
-npx wrangler login   # 初回のみ（あなたの Cloudflare アカウント）
+npx wrangler login
 npm run deploy
 ```
 
@@ -54,14 +71,6 @@ npm run preview
 
 Next.js + OpenNext の Worker バンドルは大きいため、**Workers Paid（スクリプト上限 10MiB）** が必要です。  
 無料枠 / 一時プレビュー（1MiB）ではデプロイできません。
-
-### Workers Builds（Git連携）向け
-
-Cloudflare ダッシュボードで Workers を作成し、このリポジトリを接続する場合:
-
-- **Build command:** `npx opennextjs-cloudflare build`
-- **Deploy command:** `npx opennextjs-cloudflare deploy`
-- **Root directory:** リポジトリルート
 
 ## API
 
