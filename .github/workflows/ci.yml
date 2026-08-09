@@ -6,6 +6,7 @@ on:
     branches: [main]
 
 permissions:
+  actions: write
   contents: write
   pull-requests: write
   checks: read
@@ -56,6 +57,7 @@ jobs:
               return;
             }
 
+            let merged = false;
             try {
               await github.graphql(
                 `mutation($id: ID!) {
@@ -80,4 +82,16 @@ jobs:
                 commit_title: `${pr.title} (#${pr.number})`,
               });
               core.info(`Squash-merged PR #${pr.number}`);
+              merged = true;
+            }
+
+            // GITHUB_TOKEN merges do not trigger push workflows, so dispatch Deploy explicitly.
+            if (merged) {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'deploy.yml',
+                ref: 'main',
+              });
+              core.info('Dispatched Deploy workflow on main');
             }
