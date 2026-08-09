@@ -1,0 +1,50 @@
+[
+  {
+    "id": "member-1",
+    "name": "つむぎ",
+    "shopId": 4,
+    "boyId": 10235,
+    "color": "#0F766E",
+    "enabled": true
+  },
+  {
+    "id": "member-2",
+    "name": "幹部2",
+    "shopId": 4,
+    "boyId": null,
+    "color": "#B45309",
+    "enabled": false
+  },
+  {
+    "id": "member-3",
+    "name": "幹部3",
+    "shopId": 4,
+    "boyId": null,
+    "color": "#1D4ED8",
+    "enabled": false
+  },
+  {
+    "id": "member-4",
+    "name": "幹部4",
+    "shopId": 4,
+    "boyId": null,
+    "color": "#BE123C",
+    "enabled": false
+  },
+  {
+    "id": "member-5",
+    "name": "幹部5",
+    "shopId": 4,
+    "boyId": null,
+    "color": "#15803D",
+    "enabled": false
+  },
+  {
+    "id": "member-6",
+    "name": "幹部6",
+    "shopId": 4,
+    "boyId": null,
+    "color": "#7C2D12",
+    "enabled": false
+  }
+]
