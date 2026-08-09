@@ -1,4 +1,5 @@
 import * as cheerio from "cheerio";
+import { getCache, setCache } from "./cache";
 import { colorFromBoyId } from "./colors";
 import { buildBoyUrl } from "./members";
 
@@ -22,6 +23,7 @@ export type ShopDaySchedule = {
 export type ShopScheduleResult = {
   shopId: number;
   sourceUrl: string;
+  affiliation: string;
   roster: Array<{
     boyId: number;
     name: string;
@@ -34,8 +36,99 @@ export type ShopScheduleResult = {
 const USER_AGENT =
   "Mozilla/5.0 (compatible; EX-ShiftCalendar/1.0; +https://github.com/Elion-dev99/EX)";
 
+/** shop_id → プロフィール「所属」に表示される店名 */
+const SHOP_AFFILIATION: Record<number, string> = {
+  2: "神戸店",
+  4: "大阪店",
+};
+
+const AFFILIATION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const AFFILIATION_CONCURRENCY = 8;
+
 export function buildShopShiftUrl(shopId: number): string {
   return `https://www.dgdgdg.com/boy/shift.php?shop_id=${shopId}`;
+}
+
+export function shopAffiliationLabel(shopId: number): string {
+  return SHOP_AFFILIATION[shopId] || `shop_${shopId}`;
+}
+
+/** プロフィール詳細の所属（#Belongshop）を取り出す */
+export function parseBelongShop(html: string): string | null {
+  const $ = cheerio.load(html);
+  const text = $("#Belongshop").first().text().replace(/\s+/g, " ").trim();
+  if (text) return text;
+  const m = html.match(/<div[^>]*id=["']Belongshop["'][^>]*>([^<]*)<\/div>/i);
+  return m?.[1]?.replace(/\s+/g, " ").trim() || null;
+}
+
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const i = next;
+      next += 1;
+      results[i] = await worker(items[i]);
+    }
+  }
+  const runners = Array.from({ length: Math.min(concurrency, items.length) }, () => run());
+  await Promise.all(runners);
+  return results;
+}
+
+async function fetchBelongShop(shopId: number, boyId: number): Promise<string | null> {
+  const cacheKey = `belongshop:${shopId}:${boyId}`;
+  const cached = getCache<string | null>(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const url = buildBoyUrl(shopId, boyId);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "ja,en;q=0.8",
+      },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      setCache(cacheKey, null, 5 * 60 * 1000);
+      return null;
+    }
+    const belong = parseBelongShop(await res.text());
+    setCache(cacheKey, belong, AFFILIATION_CACHE_TTL_MS);
+    return belong;
+  } catch {
+    setCache(cacheKey, null, 5 * 60 * 1000);
+    return null;
+  }
+}
+
+export async function filterByProfileAffiliation(
+  schedule: Omit<ShopScheduleResult, "affiliation"> & { affiliation?: string },
+  affiliation: string,
+): Promise<ShopScheduleResult> {
+  const allowed = new Set<number>();
+  await mapPool(schedule.roster, AFFILIATION_CONCURRENCY, async (boy) => {
+    const belong = await fetchBelongShop(schedule.shopId, boy.boyId);
+    if (belong === affiliation) allowed.add(boy.boyId);
+  });
+
+  return {
+    shopId: schedule.shopId,
+    sourceUrl: schedule.sourceUrl,
+    affiliation,
+    roster: schedule.roster.filter((b) => allowed.has(b.boyId)),
+    days: schedule.days.map((day) => ({
+      ...day,
+      boys: day.boys.filter((b) => allowed.has(b.boyId)),
+    })),
+  };
 }
 
 function resolveYear(month: number, day: number, now = new Date()): number {
@@ -82,7 +175,7 @@ export function parseShopShiftHtml(
   html: string,
   shopId: number,
   now = new Date(),
-): ShopScheduleResult {
+): Omit<ShopScheduleResult, "affiliation"> {
   const sourceUrl = buildShopShiftUrl(shopId);
   const days: ShopDaySchedule[] = [];
   const rosterMap = new Map<
@@ -180,5 +273,8 @@ export async function scrapeShopSchedule(
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
   const html = await res.text();
-  return parseShopShiftHtml(html, shopId, now);
+  const parsed = parseShopShiftHtml(html, shopId, now);
+  const affiliation = shopAffiliationLabel(shopId);
+  // シフト表の「当店在籍」には他店所属が混ざるため、プロフィール所属で絞る
+  return filterByProfileAffiliation(parsed, affiliation);
 }

@@ -145,7 +145,7 @@ export function ShopShiftBoard({ shopId }: Props) {
           <p className="brand">EX Shift</p>
           <h1>大阪店 全員シフト</h1>
           <p className="lede">
-            当店在籍 {data?.roster.length ?? "—"}人をカレンダー表示。日付を選ぶと待機店舗・時間・休みまで全員分確認できます。
+            プロフィール所属が「大阪店」の {data?.roster.length ?? "—"}人をカレンダー表示。日付を選ぶと待機店舗・時間・休みまで確認できます。
           </p>
           <div className="cta-row">
             <button type="button" className="primary-btn" onClick={() => load(true)} disabled={pending}>
