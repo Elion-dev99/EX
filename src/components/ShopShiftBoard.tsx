@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { ShopCalendar } from "@/components/ShopCalendar";
 import type { ShopDayBoy, ShopScheduleResult } from "@/lib/shop-schedule";
 
-type Filter = "all" | "work" | "inquiry" | "off" | "osaka" | "other-shop";
+type Filter = "all" | "work" | "inquiry" | "osaka" | "other-shop";
 
 type Props = {
   shopId: number;
@@ -21,7 +21,7 @@ type DayRow = {
   name: string;
   color: string;
   sourceUrl: string;
-  entry: ShopDayBoy | null;
+  entry: ShopDayBoy;
 };
 
 function toDateLabel(date: string, fallback?: string): string {
@@ -77,22 +77,20 @@ export function ShopShiftBoard({ shopId }: Props) {
 
   const rows: DayRow[] = useMemo(() => {
     if (!data) return [];
-    const byId = new Map((selectedDay?.boys || []).map((b) => [b.boyId, b]));
     const q = query.trim();
 
-    return data.roster
-      .map((boy) => ({
-        boyId: boy.boyId,
-        name: boy.name,
-        color: boy.color,
-        sourceUrl: boy.sourceUrl,
-        entry: byId.get(boy.boyId) || null,
+    // 休み/未掲載は非表示。その日出勤・要問合せなど公開されている子のみ
+    return (selectedDay?.boys || [])
+      .map((entry) => ({
+        boyId: entry.boyId,
+        name: entry.name,
+        color: entry.color,
+        sourceUrl: entry.sourceUrl,
+        entry,
       }))
       .filter((row) => {
         if (q && !row.name.includes(q)) return false;
         if (filter === "all") return true;
-        if (filter === "off") return !row.entry;
-        if (!row.entry) return false;
         if (filter === "work") return row.entry.status === "work";
         if (filter === "inquiry") return row.entry.status === "inquiry";
         if (filter === "osaka") return Boolean(row.entry.waitLabel?.includes("大阪"));
@@ -103,7 +101,6 @@ export function ShopShiftBoard({ shopId }: Props) {
       })
       .sort((a, b) => {
         const rank = (row: DayRow) => {
-          if (!row.entry) return 5;
           if (row.entry.status === "work") return 0;
           if (row.entry.status === "inquiry") return 1;
           if (row.entry.waitLabel?.includes("大阪")) return 2;
@@ -117,26 +114,19 @@ export function ShopShiftBoard({ shopId }: Props) {
   }, [data, filter, query, selectedDay]);
 
   const counts = useMemo(() => {
-    if (!data) return { all: 0, work: 0, inquiry: 0, off: 0, osaka: 0, otherShop: 0 };
-    const byId = new Map((selectedDay?.boys || []).map((b) => [b.boyId, b]));
+    const boys = selectedDay?.boys || [];
     let work = 0;
     let inquiry = 0;
-    let off = 0;
     let osaka = 0;
     let otherShop = 0;
-    for (const boy of data.roster) {
-      const entry = byId.get(boy.boyId);
-      if (!entry) {
-        off += 1;
-        continue;
-      }
+    for (const entry of boys) {
       if (entry.status === "work") work += 1;
       if (entry.status === "inquiry") inquiry += 1;
       if (entry.waitLabel?.includes("大阪")) osaka += 1;
       else if (entry.waitLabel) otherShop += 1;
     }
-    return { all: data.roster.length, work, inquiry, off, osaka, otherShop };
-  }, [data, selectedDay]);
+    return { all: boys.length, work, inquiry, osaka, otherShop };
+  }, [selectedDay]);
 
   return (
     <div className="board shop-board">
@@ -145,7 +135,7 @@ export function ShopShiftBoard({ shopId }: Props) {
           <p className="brand">EX Shift</p>
           <h1>大阪店 全員シフト</h1>
           <p className="lede">
-            ボーイ一覧の大阪店在籍 {data?.roster.length ?? "—"}人のみ表示。日付を選ぶと待機店舗・時間・休みまで確認できます。
+            大阪店在籍 {data?.roster.length ?? "—"}人のうち、その日シフト公開中のボーイだけを表示（休みは非表示）。
           </p>
           <div className="cta-row">
             <button type="button" className="primary-btn" onClick={() => load(true)} disabled={pending}>
@@ -181,12 +171,11 @@ export function ShopShiftBoard({ shopId }: Props) {
         <div className="filter-row">
           {(
             [
-              ["all", `全員 ${counts.all}`],
+              ["all", `出勤 ${counts.all}`],
               ["work", `時間あり ${counts.work}`],
               ["inquiry", `要問合せ ${counts.inquiry}`],
               ["osaka", `大阪店待機 ${counts.osaka}`],
               ["other-shop", `他店待機 ${counts.otherShop}`],
-              ["off", `休み/未掲載 ${counts.off}`],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -220,7 +209,7 @@ export function ShopShiftBoard({ shopId }: Props) {
               <span className="swatch" style={{ background: row.color }} />
               <div className="shop-row-main">
                 <strong>{row.name}</strong>
-                <p>{row.entry ? row.entry.label : "休み / この日の公開シフトなし"}</p>
+                <p>{row.entry.label}</p>
               </div>
               <a href={row.sourceUrl} target="_blank" rel="noreferrer">
                 詳細
@@ -228,7 +217,9 @@ export function ShopShiftBoard({ shopId }: Props) {
             </li>
           ))}
           {rows.length === 0 && (
-            <li className="muted">該当するボーイがいません。フィルタや検索を変えてみてください。</li>
+            <li className="muted">
+              この日は公開シフトがありません。別の日付を選ぶか、フィルタ・検索を変えてみてください。
+            </li>
           )}
         </ul>
       </section>
